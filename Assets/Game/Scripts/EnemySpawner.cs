@@ -31,6 +31,12 @@ public class EnemySpawner : MonoBehaviour
 
     private void SpawnEnemyOutside()
     {
+        // Если GameManager существует и обучение ЕЩЕ НЕ завершено — отменяем спавн птиц
+        if (GameManager.Instance != null && GameManager.Instance.CurrentStage != GameManager.TutorialState.Complete)
+        {
+            return;
+        }
+
         if (enemyPrefab == null) return;
 
         Vector3 spawnPosition = Vector3.zero;
@@ -58,4 +64,19 @@ public class EnemySpawner : MonoBehaviour
         // Просто спавним врага. Он сам активирует ИИ преследования в первом же кадре
         Instantiate(enemyPrefab, spawnPosition, Quaternion.identity, transform.parent);
     }
+    
+    // Вставь этот метод в самый низ скрипта EnemySpawner
+    private void OnDrawGizmos()
+    {
+        // Задаем красный цвет для рамки границ
+        Gizmos.color = Color.red;
+
+        // Вычисляем математический центр и размер на основе твоих параметров min/max
+        Vector3 center = new Vector3((minX + maxX) / 2f, (minY + maxY) / 2f, 0f);
+        Vector3 size = new Vector3(maxX - minX, maxY - minY, 1f);
+
+        // Рисуем проволочный куб (рамку) в окне Scene
+        Gizmos.DrawWireCube(center, size);
+    }
+
 }
