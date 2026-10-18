@@ -1162,6 +1162,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1171033575}
+  - component: {fileID: 1171033576}
   m_Layer: 0
   m_Name: SoundManager
   m_TagString: Untagged
@@ -1184,6 +1185,29 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1171033576
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1171033574}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0fd75e7f6d4c5c7498dfbceb05af8d7c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SoundManager
+  musicSource: {fileID: 0}
+  sfxSource: {fileID: 0}
+  normalMusic: {fileID: 8300000, guid: 6664aa8afa58a864596445464ede943e, type: 3}
+  bossMusic: {fileID: 8300000, guid: bf71192a51dae3644b5b896947f42fe0, type: 3}
+  cannonShotSound: {fileID: 8300000, guid: 6092ded38c46e674794067694d44aaf3, type: 3}
+  ricochetSound: {fileID: 8300000, guid: 614a4bf94baff514c94e5b725bd6d116, type: 3}
+  laserSound: {fileID: 8300000, guid: 5cfc037f3ba402f4489f90a0baa5a187, type: 3}
+  errorSound: {fileID: 8300000, guid: c2f241ad22575724285483ed05832d6e, type: 3}
+  victorySound: {fileID: 8300000, guid: d47a9863902b15647b762c937b0497ef, type: 3}
+  bossDamageSound: {fileID: 8300000, guid: d4fda3b49e9d17243a2fdee0cb5da4bc, type: 3}
+  enemyDeathSound: {fileID: 8300000, guid: 9016b2b65d35a3a41b623a1f90bc98c7, type: 3}
 --- !u!1 &1474935436
 GameObject:
   m_ObjectHideFlags: 0

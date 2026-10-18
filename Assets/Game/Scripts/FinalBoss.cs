@@ -5,229 +5,229 @@ public class FinalBoss : MonoBehaviour
 {
     public static FinalBoss Instance { get; private set; }
 
-    [Header("Настройки здоровья")]
-    [SerializeField] private float maxLaserShieldHP = 500f; // Секунды удержания лазера
-    
-    [Header("Ссылки на Хотбар из Квадратов")]
-    [SerializeField] private Transform healthBarFill;      // Сюда перетащи объект HealthBarFill
-    [SerializeField] private SpriteRenderer fillRenderer;  // Сюда перетащи SpriteRenderer объекта HealthBarFill
+    [Header("Здоровье и фазы")]
+    [SerializeField] private float maxShieldHP = 7;
+    [SerializeField] private float vulnerableTime = 9f;           // Сколько секунд босс остаётся уязвимым
+    [SerializeField] private float damageCooldown = 0.08f;        // Защита от спама лазером
 
-    [Header("Настройки движения")]
+    [Header("Хелсбар")]
+    [SerializeField] private Transform healthBarFill;
+    [SerializeField] private SpriteRenderer fillRenderer;
+
+    [Header("Движение")]
     [SerializeField] private float moveSpeed = 2f;
-    [SerializeField] private float targetXPosition = -4.5f; // Докуда выползает слева
+    [SerializeField] private float targetXPosition = -4.5f;
 
-    [Header("Параметры Спавна Врагов")]
-    [SerializeField] private int totalEnemiesToSpawn = 100;
-    [SerializeField] private float delayBetweenSpawnPackets = 0.2f;
+    [Header("Спавн врагов")]
+    [SerializeField] private int enemiesPerWave = 25;
+    [SerializeField] private float delayBetweenSpawnPackets = 0.25f;
 
-    
-    [Header("Эффект разрушения")]
-    [SerializeField] private GameObject[] piecePrefabs; 
-    [SerializeField] private int minPieces = 5;         
-    [SerializeField] private int maxPieces = 8;         
-    [SerializeField] private float explosionForce = 5f; 
+    [Header("Эффект смерти")]
+    [SerializeField] private GameObject[] piecePrefabs;
+    [SerializeField] private int minPieces = 8;
+    [SerializeField] private int maxPieces = 14;
+    [SerializeField] private float explosionForce = 5f;
 
-    
     private float currentHP;
-    private bool isInvulnerable = true; 
+    private bool isInvulnerable = true;
     private bool isPositioned = false;
-    private bool phaseRoutineStarted = false;
-    private EnemySpawner enemySpawner;
+    private bool isInVulnerablePhase = false;
+
+    private float lastDamageTime;
     private Vector3 originalFillScale;
+    private EnemySpawner enemySpawner;
 
     public bool IsInvulnerable => isInvulnerable;
 
     void Awake()
     {
         if (Instance == null) Instance = this;
-        currentHP = maxLaserShieldHP;
+
+        // --- МОДИФИКАТОРЫ ДЛЯ HARD MODE ---
+        if (GameManager.CurrentDifficulty == GameManager.Difficulty.Hard)
+        {
+            maxShieldHP *= 3f;       // ХП босса в 3 раза больше
+            enemiesPerWave *= 2;     // Врагов спавнит в 2 раза больше
+            Debug.Log($"💀 ХАРДКОРНЫЙ БОСС: ХП = {maxShieldHP}, Врагов в волне = {enemiesPerWave}");
+        }
+        // ----------------------------------
+
+        currentHP = maxShieldHP;
     }
+
 
     void Start()
     {
-        enemySpawner = GameObject.FindObjectOfType<EnemySpawner>();
+        enemySpawner = FindObjectOfType<EnemySpawner>();
 
         if (healthBarFill != null)
-        {
             originalFillScale = healthBarFill.localScale;
-        }
 
-        UpdateHealthBarVisual();
-        StartCoroutine(BossPhaseRoutine());
+        UpdateHealthBar();
+        StartCoroutine(BossBattleRoutine());
     }
 
     void Update()
     {
-        // Выползаем слева
         if (!isPositioned)
         {
-            transform.position = Vector3.MoveTowards(transform.position, 
-                new Vector3(targetXPosition, transform.position.y, transform.position.z), 
+            transform.position = Vector3.MoveTowards(transform.position,
+                new Vector3(targetXPosition, transform.position.y, 0f),
                 moveSpeed * Time.deltaTime);
 
             if (Mathf.Abs(transform.position.x - targetXPosition) < 0.05f)
-            {
                 isPositioned = true;
-            }
-        }
-
-        // ТОЧЕЧНЫЙ ФИКС: Если все враги на сцене перебиты (остался только 1 объект — сам босс)
-        if (isPositioned && isInvulnerable && phaseRoutineStarted)
-        {
-            int aliveEnemies = GameObject.FindGameObjectsWithTag("Enemy").Length;
-        
-            // Если обычных врагов больше нет, снимаем неуязвимость
-            if (aliveEnemies <= 1) 
-            {
-                SetInvulnerableState(false);
-            }
         }
     }
 
-
-    private IEnumerator BossPhaseRoutine()
+    // ====================== ОСНОВНАЯ ЛОГИКА БОССА ======================
+    private IEnumerator BossBattleRoutine()
     {
         yield return new WaitUntil(() => isPositioned);
-        phaseRoutineStarted = true;
 
         while (currentHP > 0)
         {
-            // ФАЗА 1: Призыв орды
-            SetInvulnerableState(true);
-            Debug.Log($"👾 МАТЬ ВРАГОВ: Спавню {totalEnemiesToSpawn} прихвостней!");
+            // === ФАЗА 1: ЩИТ АКТИВЕН ===
+            isInvulnerable = true;
+            isInVulnerablePhase = false;
+            UpdateVisuals();
 
-            if (enemySpawner != null)
+            Debug.Log("🛡️ Босс поднял щит. Спавним орду...");
+
+            yield return StartCoroutine(SpawnEnemyWave());
+
+            // Ждём, пока игрок не убьёт всех врагов
+            yield return new WaitUntil(() => AreAllEnemiesDead());
+
+            // === ФАЗА 2: ЩИТ СНЯТ — БОСС УЯЗВИМ ===
+            isInvulnerable = false;
+            isInVulnerablePhase = true;
+            UpdateVisuals();
+
+            Debug.Log($"⚡ Босс уязвим! У вас {vulnerableTime} секунд!");
+
+            float timer = 0f;
+            while (timer < vulnerableTime && currentHP > 0)
             {
-                int spawnedCount = 0;
-                while (spawnedCount < totalEnemiesToSpawn)
-                {
-                    StartCoroutine(enemySpawner.ExecuteSpawnCommand(StageManager.SpawnType.Swarm, 4));
-                    spawnedCount += 4;
-                    yield return new WaitForSeconds(delayBetweenSpawnPackets);
-                }
+                timer += Time.deltaTime;
+                yield return null;
             }
 
-            // Ждем, пока игрок выкосит абсолютно всех мобов
-            yield return new WaitUntil(() => !isInvulnerable);
-
-            // ФАЗА 2: Щит упал, босс уязвим
-            Debug.Log("⚡ ЩИТ БОССА СДОХ! ЖГИТЕ ЕЁ!");
-        
-            // Даем игроку 7 секунд чистого времени на урон
-            yield return new WaitForSeconds(7f);
-        
-            // ТОЧЕЧНЫЙ ФИКС: Если за эти 7 секунд босс не умер, он снова закрывается щитом и спавнит новую сотню!
+            // Если босс не умер — снова поднимаем щит
             if (currentHP > 0)
             {
-                Debug.Log("🛡️ БОСС: Время уязвимости истекло! Перезарядка щита!");
-                // Принудительно возвращаем в Update состояние поиска врагов для следующего круга
-                isInvulnerable = true; 
+                Debug.Log("🛡️ Время уязвимости закончилось. Босс снова закрывается щитом.");
             }
         }
+
+        BossDeath();
     }
 
-
-    private void SetInvulnerableState(bool invulnerable)
+    private IEnumerator SpawnEnemyWave()
     {
-        isInvulnerable = invulnerable;
-        if (fillRenderer != null)
+        if (enemySpawner == null) yield break;
+
+        int spawned = 0;
+
+        while (spawned < enemiesPerWave)
         {
-            // Зеленый — уязвим, Красный — неуязвим (активен щит)
-            fillRenderer.color = invulnerable ? Color.red : Color.green;
+            int toSpawn = Mathf.Min(5, enemiesPerWave - spawned);
+            StartCoroutine(enemySpawner.ExecuteSpawnCommand(StageManager.SpawnType.Swarm, toSpawn));
+            spawned += toSpawn;
+            yield return new WaitForSeconds(delayBetweenSpawnPackets);
         }
     }
 
+    private bool AreAllEnemiesDead()
+    {
+        return GameObject.FindGameObjectsWithTag("Enemy").Length <= 1;
+    }
+
+    // ====================== ПОЛУЧЕНИЕ УРОНА ======================
     public void TakeLaserDamage(float damageAmount)
     {
         if (isInvulnerable || currentHP <= 0) return;
+        if (Time.time - lastDamageTime < damageCooldown) return;
+
+        lastDamageTime = Time.time;
 
         currentHP -= damageAmount;
-        UpdateHealthBarVisual();
+        UpdateHealthBar();
 
         StopCoroutine(DamageFlash());
         StartCoroutine(DamageFlash());
 
         if (currentHP <= 0)
-        {
             BossDeath();
-        }
     }
 
-    private void UpdateHealthBarVisual()
+    private void UpdateVisuals()
+    {
+        if (fillRenderer != null)
+            fillRenderer.color = isInvulnerable ? Color.red : Color.green;
+    }
+
+    private void UpdateHealthBar()
     {
         if (healthBarFill == null) return;
 
-        float hpPercentage = Mathf.Clamp01(currentHP / maxLaserShieldHP);
-        // Скейлим дочерний квадрат по оси X на основе процента здоровья
-        healthBarFill.localScale = new Vector3(originalFillScale.x * hpPercentage, originalFillScale.y, originalFillScale.z);
+        float percent = Mathf.Clamp01(currentHP / maxShieldHP);
+        healthBarFill.localScale = new Vector3(originalFillScale.x * percent, originalFillScale.y, originalFillScale.z);
     }
 
     private IEnumerator DamageFlash()
     {
         var sr = GetComponent<SpriteRenderer>();
-        if (sr != null)
-        {
-            sr.color = Color.gray;
-            yield return new WaitForSeconds(0.05f);
-            sr.color = Color.white;
-        }
+        if (sr == null) yield break;
+
+        sr.color = new Color(0.6f, 0.6f, 0.6f);
+        yield return new WaitForSeconds(0.08f);
+        sr.color = Color.white;
     }
 
     private void BossDeath()
     {
         ExplodeIntoPieces();
-        Debug.Log("🎉 ПОБЕДА! МАТЬ ВРАГОВ СТЕРТА В ПОРОШОК!");
+        Debug.Log("🎉 БОСС УНИЧТОЖЕН! ПОБЕДА!");
         StopAllCoroutines();
-        if (GameManager.Instance != null) GameManager.Instance.TriggerWin();
-        Destroy(gameObject);
-    }
-    
-    private void OnCollisionEnter2D(Collision2D collision)
-    {
-        if (GameManager.Instance != null && GameManager.Instance.IsGameOver) return;
 
-        // Если коснулись игрока
-        if (collision.gameObject.CompareTag("Player") || collision.gameObject.layer == LayerMask.NameToLayer("Player"))
-        {
-            collision.gameObject.GetComponent<PlayerController>().ExplodeIntoPieces();
-            Debug.Log("💀 ИГРОК ПРОИГРАЛ! Зафиксировано жесткое столкновение с красным кругом.");
-            if (GameManager.Instance != null)
-            {
-                GameManager.Instance.TriggerGameOver();
-            }
-        }
+        if (GameManager.Instance != null)
+            GameManager.Instance.TriggerWin();
     }
-    
+
     private void ExplodeIntoPieces()
     {
         if (piecePrefabs == null || piecePrefabs.Length == 0) return;
 
-        Vector3 spawnPosition = transform.position;
-        int spawnCount = Random.Range(minPieces, maxPieces + 1);
+        int count = Random.Range(minPieces, maxPieces + 1);
+        Vector3 pos = transform.position;
 
-        for (int i = 0; i < spawnCount; i++)
+        for (int i = 0; i < count; i++)
         {
-            // Каждый осколок — отдельный Instantiate!
-            GameObject prefab = piecePrefabs[Random.Range(0, piecePrefabs.Length)];
-            GameObject pieceObj = Instantiate(prefab, spawnPosition, Quaternion.identity);
-        
-            EnemyPiece pieceScript = pieceObj.GetComponent<EnemyPiece>();
+            GameObject piece = Instantiate(piecePrefabs[Random.Range(0, piecePrefabs.Length)], pos, Quaternion.identity);
+            EnemyPiece script = piece.GetComponent<EnemyPiece>();
 
-            if (pieceScript != null)
+            if (script != null)
             {
-                float randomAngle = Random.Range(0f, Mathf.PI * 2f);
-                Vector2 direction = new Vector2(Mathf.Cos(randomAngle), Mathf.Sin(randomAngle));
-            
-                float speed = Random.Range(explosionForce * 0.6f, explosionForce * 1.4f);
-            
-                // Небольшой разброс по позиции, чтобы не спавнились в одной точке
-                Vector3 offset = Random.insideUnitCircle * 0.3f;
-                pieceObj.transform.position += offset;
-
-                pieceScript.InitializePiece(direction, speed);
+                Vector2 dir = Random.insideUnitCircle.normalized;
+                float speed = Random.Range(explosionForce * 0.7f, explosionForce * 1.6f);
+                piece.transform.position += (Vector3)Random.insideUnitCircle * 0.4f;
+                script.InitializePiece(dir, speed);
             }
         }
 
-        Destroy(gameObject);
+        Destroy(gameObject, 0.1f);
+    }
+
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Player"))
+        {
+            var player = collision.gameObject.GetComponent<PlayerController>();
+            if (player != null) player.ExplodeIntoPieces();
+
+            if (GameManager.Instance != null)
+                GameManager.Instance.TriggerGameOver();
+        }
     }
 }

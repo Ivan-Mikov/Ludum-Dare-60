@@ -3,12 +3,13 @@ using DG.Tweening;
 
 public class LaserBeam : MonoBehaviour
 {
-    [Header("Настройки анимации DOTween")]
-    [SerializeField] private float appearanceDuration = 0.15f;
+    [Header("Настройки анимации DOTween")] [SerializeField]
+    private float appearanceDuration = 0.15f;
+
     [SerializeField] private float disappearanceDuration = 0.1f;
 
     // Сделаем размеры явными, чтобы они не зависели от родительских скейлов
-    private Vector3 targetScale = new Vector3(1f, 1f, 1f); 
+    private Vector3 targetScale = new Vector3(1f, 1f, 1f);
     private bool isActive = false;
 
     private const float MinX = -5.32f;
@@ -27,10 +28,10 @@ public class LaserBeam : MonoBehaviour
     {
         isActive = true;
         gameObject.SetActive(true);
-        
+
         // Обязательно сбрасываем предыдущие анимации, чтобы они не конфликтовали
         transform.DOKill();
-        
+
         // Начинаем строго из нулевого масштаба
         transform.localScale = Vector3.zero;
 
@@ -50,7 +51,7 @@ public class LaserBeam : MonoBehaviour
     {
         if (!isActive) return;
         isActive = false;
-        
+
         transform.DOKill();
 
         // ШАГ 1: Схлопываем по толщине (Y и Z) в ноль
@@ -74,14 +75,16 @@ public class LaserBeam : MonoBehaviour
         {
             if (!boss.IsInvulnerable)
             {
-                // Наносим 1 единицу урона в секунду (значит 20 секунд удержания луча)
-                boss.TakeLaserDamage(Time.deltaTime); 
+                // Наносим 1 единицу урона в секунду
+                boss.TakeLaserDamage(Time.deltaTime);
+                SoundManager.Instance.PlaySFX(SoundManager.SoundEffect.BossDamage);
             }
-            return; // Выходим, чтобы босс не обрабатывался как обычный моб
+            return; // Выходим в любом случае, если это босс (независимо от щита)
         }
 
-        // 2. ОБЫЧНЫЕ ВРАГИ (Выжигаются мгновенно)
-        if (collision.CompareTag("Enemy") || collision.gameObject.layer == LayerMask.NameToLayer("Enemy") || collision.GetComponent<PhantomEnemy>() != null)
+        // 2. ОБЫЧНЫЕ ВРАГИ (Вынесены за пределы проверки босса)
+        if (collision.CompareTag("Enemy") || collision.gameObject.layer == LayerMask.NameToLayer("Enemy") ||
+            collision.GetComponent<PhantomEnemy>() != null)
         {
             Vector3 enemyPos = collision.transform.position;
 
@@ -95,5 +98,4 @@ public class LaserBeam : MonoBehaviour
             }
         }
     }
-
 }

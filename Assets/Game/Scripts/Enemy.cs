@@ -72,6 +72,8 @@ public class EnemyCircle : MonoBehaviour
     // 1. Физическое касание игрока (твердое тело об твердое тело)
     private void OnCollisionEnter2D(Collision2D collision)
     {
+        SoundManager.Instance.PlaySFX(SoundManager.SoundEffect.EnemyDeath);
+        
         if (GameManager.Instance != null && GameManager.Instance.IsGameOver) return;
 
         // Если коснулись игрока
@@ -89,6 +91,8 @@ public class EnemyCircle : MonoBehaviour
     // 2. Попадание пули-триггера
     private void OnTriggerEnter2D(Collider2D other)
     {
+        SoundManager.Instance.PlaySFX(SoundManager.SoundEffect.EnemyDeath);
+        
         if (GameManager.Instance != null && GameManager.Instance.IsGameOver) return;
 
         // Если пробила пуля

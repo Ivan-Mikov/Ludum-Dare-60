@@ -313,12 +313,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ab5fc0cc7e1bb4341b4f2f3f854c6500, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FinalBoss
-  maxLaserShieldHP: 150
+  maxShieldHP: 7
+  vulnerableTime: 9
+  damageCooldown: 0.08
   healthBarFill: {fileID: 6134207478471837568}
   fillRenderer: {fileID: 2381600689676499100}
   moveSpeed: 2
   targetXPosition: -4.5
-  totalEnemiesToSpawn: 100
+  enemiesPerWave: 100
   delayBetweenSpawnPackets: 0.2
   piecePrefabs:
   - {fileID: 6654093636929287918, guid: 57a3cfc399e36ea4ab76d6aa84881598, type: 3}

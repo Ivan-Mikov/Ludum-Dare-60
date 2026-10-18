@@ -11,6 +11,7 @@ public class GameManager : MonoBehaviour
 
     public enum GameStage 
     { 
+        Stage0_Tutorial, // <-- ДОБАВИЛИ СЮДА
         Stage1_TutorialAndDefaultEnemies, 
         Stage2_Shotgun,                   
         Stage3_Ricochet,                  
@@ -19,6 +20,10 @@ public class GameManager : MonoBehaviour
         Win, 
         GameOver 
     }
+
+    public enum Difficulty { Normal, Hard }
+    // Статическое свойство, чтобы любая сцена и скрипт знали текущую сложность
+    public static Difficulty CurrentDifficulty { get; private set; } = Difficulty.Normal;
     
     [Header("Текущая стадия игры")]
     [SerializeField] private GameStage currentStage = GameStage.Stage1_TutorialAndDefaultEnemies;
@@ -41,6 +46,8 @@ public class GameManager : MonoBehaviour
     [Header("Финальный Босс")]
     [SerializeField] private GameObject bossPrefab; // Перетащи сюда префаб босса
 
+    [Header("Меню")]
+    [SerializeField] private GameObject menuPanel; // Сюда перетащи ту же MenuPanel из Canvas
 
     private Vector3 originalScale;
     private int stageKillsCount = 0; 
@@ -70,22 +77,59 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
+        // Проверяем нажатие кнопки перезапуска, только если игра официально завершена (Победа или Поражение)
         if (IsGameOver)
         {
             if (Input.GetKeyDown(KeyCode.R))
             {
-                // Загружаем сцену заново (StageManager автоматически подтянет сохраненную стадию!)
-                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+                // СЦЕНАРИЙ 1: Игрок ПОБЕДИЛ финального босса
+                // СЦЕНАРИЙ 1: Игрок победил босса — выходим в меню
+                if (currentStage == GameStage.Win)
+                {
+                    Debug.Log("🎉 Победный возврат в меню.");
+
+                    // 1. Сначала останавливаем и сбрасываем игровой цикл в StageManager
+                    if (StageManager.Instance != null)
+                    {
+                        StageManager.Instance.StopGameForMenu();
+                    }
+
+                    // 2. СРАЗУ переводим стейдж в исходное состояние (иначе сработает блокировка GameOver)
+                    currentStage = GameStage.Stage1_TutorialAndDefaultEnemies;
+
+                    // 3. Теперь принудительно гасим и очищаем текст на экране
+                    if (tutorialTextMesh != null)
+                    {
+                        tutorialTextMesh.text = "";
+                        tutorialTextMesh.gameObject.SetActive(false);
+                    }
+
+                    // 4. Включаем панель главного меню обратно
+                    if (menuPanel != null)
+                    {
+                        menuPanel.SetActive(true);
+                    }
+                }
+
+                // СЦЕНАРИЙ 2: Игрок ПРОИГРАЛ (GameOver)
+                else if (currentStage == GameStage.GameOver)
+                {
+                    Debug.Log("💀 Перезапускаем стадию, на которой игрок потерпел поражение...");
+                
+                    // Загружаем сцену заново (StageManager автоматически загрузит сохраненный индекс стадии)
+                    SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+                }
             }
-            return; 
+            return; // Если игра окончена, дальнейший код Update (кнопка N) не должен выполняться
         }
 
-        // Отремонтированный отладочный переход
+        // Отладочный переход на следующую стадию во время геймплея
         if (Input.GetKeyDown(KeyCode.N))
         {
             AdvanceStageDebug();
         }
     }
+
     
     // Синхронизация стадии из StageManager при старте уровня
     public void SyncStageOnLoad(int stageIndex)
@@ -101,12 +145,14 @@ public class GameManager : MonoBehaviour
     public void SetCustomTutorialText(string text)
     {
         if (tutorialTextMesh == null) return;
-        if (IsGameOver) return;
+        // ТАКЖЕ УДАЛИТЕ ИЛИ ЗАКОММЕНТИРУЙТЕ СТРОКУ НИЖЕ:
+        // if (IsGameOver) return; 
 
         tutorialTextMesh.gameObject.SetActive(text != "");
         tutorialTextMesh.text = text;
         tutorialTextMesh.color = Color.white;
     }
+
 
     public void TriggerGameOver()
     {
@@ -279,6 +325,7 @@ public class GameManager : MonoBehaviour
     {
         switch (stage)
         {
+            case GameStage.Stage0_Tutorial:                  Debug.Log("🎓 Началось обучение."); break; // <-- ДОБАВИЛИ
             case GameStage.Stage1_TutorialAndDefaultEnemies: StartStage1_DefaultEnemies(); break;
             case GameStage.Stage2_Shotgun:                   StartStage2_Shotgun(); break;
             case GameStage.Stage3_Ricochet:                  StartStage3_Ricochet(); break;
@@ -286,7 +333,7 @@ public class GameManager : MonoBehaviour
             case GameStage.Stage5_Bulldozer:                 StartStage5_Bulldozer(); break;
         }
     }
-    
+
     // Метод для корректного перехода на следующую стадию без двойных инкрементов
     public void SwitchToStage(int stageIndex)
     {
@@ -317,6 +364,23 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // Метод для загрузки игры из главного меню
+    public static void SetDifficulty(Difficulty difficulty)
+    {
+        CurrentDifficulty = difficulty;
+        StageManager.ResetSavedStage(); 
+    }
+
+    public static void SetTutorialMode()
+    {
+        CurrentDifficulty = Difficulty.Normal; // В туториале всегда нормальная сложность
+        StageManager.ResetSavedStage(); 
+    
+        if (Instance != null)
+        {
+            Instance.currentStage = GameStage.Stage0_Tutorial;
+        }
+    }
 
 
 }

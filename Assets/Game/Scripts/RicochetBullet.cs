@@ -39,11 +39,13 @@ public class RicochetBullet : MonoBehaviour
         // Отскок от левой или правой стены
         if (pos.x <= MinX && moveDirection.x < 0)
         {
+            SoundManager.Instance.PlaySFX(SoundManager.SoundEffect.Ricochet);
             moveDirection = Vector2.Reflect(moveDirection, Vector2.right);
             UpdateRotation();
         }
         else if (pos.x >= MaxX && moveDirection.x > 0)
         {
+            SoundManager.Instance.PlaySFX(SoundManager.SoundEffect.Ricochet);
             moveDirection = Vector2.Reflect(moveDirection, Vector2.left);
             UpdateRotation();
         }
@@ -51,11 +53,13 @@ public class RicochetBullet : MonoBehaviour
         // Отскок от нижней или верхней стены
         if (pos.y <= MinY && moveDirection.y < 0)
         {
+            SoundManager.Instance.PlaySFX(SoundManager.SoundEffect.Ricochet);
             moveDirection = Vector2.Reflect(moveDirection, Vector2.up);
             UpdateRotation();
         }
         else if (pos.y >= MaxY && moveDirection.y > 0)
         {
+            SoundManager.Instance.PlaySFX(SoundManager.SoundEffect.Ricochet);
             moveDirection = Vector2.Reflect(moveDirection, Vector2.down);
             UpdateRotation();
         }

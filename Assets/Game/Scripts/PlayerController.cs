@@ -35,6 +35,8 @@ public class PlayerController : MonoBehaviour
     private bool isLaserFiring = false; // Состояние: лазер сейчас фигачит?
     private LaserBeam[] tripleLasers = new LaserBeam[3]; // Три луча для финальной стадии
     private bool isTripleLaserFiring = false;
+    private GameManager.GameStage lastCheckedStage; // Храним стадию из прошлого кадра
+
     
     private Animator animator;
     private Rigidbody2D rb;
@@ -47,6 +49,10 @@ public class PlayerController : MonoBehaviour
     private const float MaxX = 1.44f;
     private const float MinY = -2.02f;
     private const float MaxY = 2.3f;
+    
+    [Header("Меню")]
+    [SerializeField] private GameObject menuPanel; // Сюда перетащи ту же MenuPanel из Canvas
+
 
     void Start()
     {
@@ -63,7 +69,35 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
-        // Проверяем стадии через логические переменные, чтобы не путаться
+        // Если панель меню существует и она АКТИВНА на сцене — блокируем всё управление
+        if (menuPanel != null && menuPanel.activeSelf) 
+        {
+            if (spawnedLaser != null && spawnedLaser.gameObject.activeSelf) spawnedLaser.DeactivateBeam();
+            ToggleTripleLasers(false);
+            return; 
+        }
+        // ---- НОВЫЙ БЛОК: СБРОС ПРИ СМЕНЕ СТАДИИ ----
+        if (GameManager.Instance != null)
+        {
+            GameManager.GameStage currentStage = GameManager.Instance.CurrentStage;
+        
+            // Если стадия изменилась по сравнению с прошлым кадром
+            if (currentStage != lastCheckedStage)
+            {
+                currentAmmo = 0f;          // Обнуляем шкалу энергии
+                isLaserFiring = false;     // Выключаем флаг обычного лазера
+                isTripleLaserFiring = false; // Выключаем флаг тройного лазера
+            
+                // Выключаем лучи физически, чтобы они не зависли горящими
+                if (spawnedLaser != null) spawnedLaser.DeactivateBeam();
+                ToggleTripleLasers(false);
+            
+                lastCheckedStage = currentStage; // Запоминаем новую стадию
+            }
+        }
+        // --------------------------------------------
+
+        // Проверяем стадии через логические переменные
         bool isBossStage = (GameManager.Instance != null && GameManager.Instance.CurrentStage == GameManager.GameStage.Stage5_Bulldozer);
         bool isLaserStage = (GameManager.Instance != null && GameManager.Instance.CurrentStage == GameManager.GameStage.Stage4_Laser);
 
@@ -73,7 +107,6 @@ public class PlayerController : MonoBehaviour
         }
         else if (isLaserStage)
         {
-            // Выключаем тройные лазеры, если ушли со стадии босса дебагом
             ToggleTripleLasers(false);
             HandleLaserLogic();
         }
@@ -81,21 +114,29 @@ public class PlayerController : MonoBehaviour
         {
             ToggleTripleLasers(false);
             if (spawnedLaser != null && spawnedLaser.gameObject.activeSelf) spawnedLaser.DeactivateBeam();
-    
+
             HandleShooting();
             HandleAmmoRecharge();
         }
 
-        // ТЕПЕРЬ ПУШКА ВРАЩАЕТСЯ ВСЕГДА, ТАК КАК RETURN УБРАН
         RotateGunTowardsCursor(); 
     }
 
 
 
+
     void FixedUpdate()
     {
+        // Если меню открыто — не даем двигаться и флипаться
+        if (menuPanel != null && menuPanel.activeSelf) 
+        {
+            if (rb != null) rb.linearVelocity = Vector2.zero; // Гасим инерцию, если она есть
+            animator.SetBool("isRunning", false);
+            return; 
+        }
+
         HandleMovement();
-        FlipCharacterTowardsCursor(); // Флипаем персонажа по курсору
+        FlipCharacterTowardsCursor(); 
     }
 
     private void HandleMovement()
@@ -185,6 +226,7 @@ public class PlayerController : MonoBehaviour
             {
                 if (GameManager.Instance != null)
                 {
+                    SoundManager.Instance.PlaySFX(SoundManager.SoundEffect.Error);
                     GameManager.Instance.PlayDoubleLoopClickWarning();
                 }
             }
@@ -225,11 +267,13 @@ public class PlayerController : MonoBehaviour
                 GameObject bulletObj = Instantiate(bulletPrefab, secondarySpawnPos, Quaternion.identity);
                 if (bulletObj.TryGetComponent<Bullet>(out var bulletScript)) { bulletScript.Initialize(shootDirection, bulletSpeed); }
             }
+            SoundManager.Instance.PlaySFX(SoundManager.SoundEffect.CannonShot);
             Debug.Log("💥 КРУШИТЕЛЬНЫЙ ЗАЛП: 9 пуль (5 в первом ряду, 4 во втором)!");
         }
         // --- СТАДИЯ 3: РИКОШЕТНЫЕ ПУЛИ (ВОЗВРАТ К СТАРОЙ ПУШКЕ С МОДИФИКАТОРОМ) ---
         else if (GameManager.Instance != null && GameManager.Instance.CurrentStage == GameManager.GameStage.Stage3_Ricochet)
         {
+            SoundManager.Instance.PlaySFX(SoundManager.SoundEffect.CannonShot);
             if (ricochetBulletPrefab != null)
             {
                 GameObject bulletObj = Instantiate(ricochetBulletPrefab, spawnPoint.position, Quaternion.identity);
@@ -248,6 +292,7 @@ public class PlayerController : MonoBehaviour
         // --- ОСТАЛЬНЫЕ СТАДИИ (ДЕФОЛТНАЯ СТРЕЛЬБА) ---
         else
         {
+            SoundManager.Instance.PlaySFX(SoundManager.SoundEffect.CannonShot);
             GameObject bulletObj = Instantiate(bulletPrefab, spawnPoint.position, Quaternion.identity);
             Bullet bulletScript = bulletObj.GetComponent<Bullet>();
         
@@ -362,6 +407,7 @@ public class PlayerController : MonoBehaviour
         }
         else
         {
+            SoundManager.Instance.OnLaser();
             // --- РЕЖИМ СТРЕЛЬБЫ ---
             // Лазер горит непрерывно и тратит шкалу тепла до нуля (даже если ЛКМ отпущен)
             currentAmmo = Mathf.MoveTowards(currentAmmo, 0f, laserCoolRate * Time.deltaTime);
@@ -370,6 +416,7 @@ public class PlayerController : MonoBehaviour
             {
                 isLaserFiring = false;
                 if (spawnedLaser != null) spawnedLaser.DeactivateBeam();
+                SoundManager.Instance.OffLaser();
             }
         }
 
@@ -425,12 +472,14 @@ public class PlayerController : MonoBehaviour
         }
         else
         {
+            SoundManager.Instance.OnLaser();
             currentAmmo = Mathf.MoveTowards(currentAmmo, 0f, laserCoolRate * Time.deltaTime * 1.2f);
 
             if (currentAmmo <= 0f)
             {
                 isTripleLaserFiring = false;
                 ToggleTripleLasers(false);
+                SoundManager.Instance.OffLaser();
             }
         }
 
