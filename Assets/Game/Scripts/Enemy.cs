@@ -6,10 +6,10 @@ public class EnemyCircle : MonoBehaviour
     [SerializeField] private float speed = 2f; 
 
     [Header("Эффект разрушения")]
-    [SerializeField] private GameObject[] piecePrefabs; // Сюда в инспекторе перетащите префабы осколков
-    [SerializeField] private int minPieces = 5;         // Минимальное количество осколков
-    [SerializeField] private int maxPieces = 8;         // Максимальное количество осколков
-    [SerializeField] private float explosionForce = 5f; // Сила разлета осколков
+    [SerializeField] private GameObject[] piecePrefabs; 
+    [SerializeField] private int minPieces = 5;         
+    [SerializeField] private int maxPieces = 8;         
+    [SerializeField] private float explosionForce = 5f; 
 
     private Rigidbody2D rb;
     private Transform playerTransform;
@@ -23,7 +23,8 @@ public class EnemyCircle : MonoBehaviour
 
     void Start()
     {
-        PointDrawer playerScript = Object.FindFirstObjectByType<PointDrawer>();
+        // Ищем новый компонент игрока вместо старого PointDrawer
+        PlayerController playerScript = Object.FindFirstObjectByType<PlayerController>();
         if (playerScript != null)
         {
             playerTransform = playerScript.transform;
@@ -32,6 +33,12 @@ public class EnemyCircle : MonoBehaviour
 
     void FixedUpdate()
     {
+        if (GameManager.Instance != null && GameManager.Instance.IsGameOver)
+        {
+            if (rb != null) rb.linearVelocity = Vector2.zero;
+            return;
+        }
+
         if (playerTransform != null && rb != null)
         {
             Vector2 heading = (Vector2)playerTransform.position - rb.position;
@@ -62,23 +69,40 @@ public class EnemyCircle : MonoBehaviour
         }
     }
 
+    // 1. Физическое касание игрока (твердое тело об твердое тело)
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        // КОНТАКТ С ИГРОКОМ: Проигрыш
-        if (collision.gameObject.layer == LayerMask.NameToLayer("Player") || collision.gameObject.CompareTag("Player"))
-        {
-            Debug.Log("💀 ИГРОК ПРОИГРАЛ! Вас поймал красный круг.");
-            return;
-        }
+        if (GameManager.Instance != null && GameManager.Instance.IsGameOver) return;
 
-        // КОНТАКТ С НАРИСОВАННЫМ ОБЪЕКТОМ: Смерть и разлет на куски
-        if (collision.gameObject.layer == LayerMask.NameToLayer("DrawnObjects") || collision.gameObject.GetComponent<PolygonCollider2D>() != null)
+        // Если коснулись игрока
+        if (collision.gameObject.CompareTag("Player") || collision.gameObject.layer == LayerMask.NameToLayer("Player"))
         {
-            Debug.Log("💥 Хахахах лох! Враг разбит на физичные кусочки.");
-            ExplodeIntoPieces();
-            Destroy(gameObject);
+            collision.gameObject.GetComponent<PlayerController>().ExplodeIntoPieces();
+            Debug.Log("💀 ИГРОК ПРОИГРАЛ! Зафиксировано жесткое столкновение с красным кругом.");
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.TriggerGameOver();
+            }
         }
     }
+
+    // 2. Попадание пули-триггера
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (GameManager.Instance != null && GameManager.Instance.IsGameOver) return;
+
+        // Если пробила пуля
+        if (other.GetComponent<Bullet>() != null || other.GetComponent<RicochetBullet>() != null || other.GetComponent<LaserBeam>())
+        {
+            Debug.Log("💥 Враг уничтожен выстрелом пули!");
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.RegisterEnemyKilled();
+            }
+            ExplodeIntoPieces();
+        }
+    }
+    
 
     private void ExplodeIntoPieces()
     {

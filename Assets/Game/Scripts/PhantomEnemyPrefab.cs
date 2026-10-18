@@ -79,21 +79,31 @@ public class PhantomEnemy : MonoBehaviour
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        if (collision.gameObject.CompareTag("Player")) return;
+        if (GameManager.Instance != null && GameManager.Instance.IsGameOver) return;
 
-        // Если врезался в линию — разлетается на твои кусочки EnemyPiece и шлет сигнал в туториал
-        if (collision.gameObject.layer == LayerMask.NameToLayer("DrawnObjects") || collision.gameObject.GetComponent<PolygonCollider2D>() != null)
+        // Если фантом врезался в игрока, тоже можно засчитать урон/проигрыш
+        if (collision.gameObject.CompareTag("Player"))
+        {
+            if (GameManager.Instance != null) GameManager.Instance.TriggerGameOver();
+        }
+    }
+
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        // Если фантом прошит пулей
+        if (other.GetComponent<Bullet>() != null)
         {
             ExplodeIntoPieces();
 
             if (GameManager.Instance != null)
             {
-                GameManager.Instance.RegisterPhantomKilled();
+                GameManager.Instance.RegisterEnemyKilled();
             }
 
             Destroy(gameObject);
         }
     }
+
 
     // Твой кастомный метод взрыва, который берет префабы осколков и инициализирует их по твоему коду EnemyPiece
     private void ExplodeIntoPieces()

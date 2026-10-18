@@ -3,37 +3,50 @@ using UnityEngine.UI;
 using TMPro; 
 using DG.Tweening;
 using System.Collections;
+using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
 
-    public enum TutorialState { DrawLines, EnergyNotice, KillPhantoms, Complete }
-    [Header("Текущий этап обучения")]
-    [SerializeField] private TutorialState currentStage = TutorialState.DrawLines;
+    public enum GameStage 
+    { 
+        Stage1_TutorialAndDefaultEnemies, 
+        Stage2_Shotgun,                   
+        Stage3_Ricochet,                  
+        Stage4_Laser,                     
+        Stage5_Bulldozer,                 
+        Win, 
+        GameOver 
+    }
+    
+    [Header("Текущая стадия игры")]
+    [SerializeField] private GameStage currentStage = GameStage.Stage1_TutorialAndDefaultEnemies;
 
     [Header("Ссылки на компоненты UI")]
     [SerializeField] private TextMeshProUGUI tutorialTextMesh; 
     [SerializeField] private Image energyBarFillImage;     
 
-    [Header("Настройки спавна фантомов")]
+    [Header("Настройки спавна фантомов (Стадия 1)")]
     [SerializeField] private GameObject phantomEnemyPrefab; 
 
-    [Header("Настройки цвета шкалы (Задаются кодом)")]
+    [Header("Настройки цвета шкалы энергии")]
     [SerializeField] private Color normalGameplayColor = Color.red; 
     [SerializeField] private Color clickWarningColor = Color.white; 
 
-    [Header("Настройки одиночной анимации")]
+    [Header("Настройки анимации шкалы")]
     [SerializeField] private float pulseScaleY = 1.4f;         
     [SerializeField] private float animationDuration = 0.12f;   
+    
+    [Header("Финальный Босс")]
+    [SerializeField] private GameObject bossPrefab; // Перетащи сюда префаб босса
 
-    private PointDrawer pointDrawer;
+
     private Vector3 originalScale;
+    private int stageKillsCount = 0; 
 
-    private int linesDrawnCount = 0;
-    private int phantomsKilledCount = 0;
-
-    public TutorialState CurrentStage => currentStage;
+    public GameStage CurrentStage => currentStage;
+    public bool IsGameOver => currentStage == GameStage.Win || currentStage == GameStage.GameOver;
 
     void Awake()
     {
@@ -53,120 +66,182 @@ public class GameManager : MonoBehaviour
         {
             originalScale = energyBarFillImage.transform.localScale;
         }
-
-        pointDrawer = Object.FindFirstObjectByType<PointDrawer>();
-        UpdateTutorialText();
     }
 
     void Update()
     {
-        if (pointDrawer == null || energyBarFillImage == null) return;
-
-        if (Input.GetMouseButtonDown(0))
+        if (IsGameOver)
         {
-            if (energyBarFillImage.fillAmount < 0.2f)
+            if (Input.GetKeyDown(KeyCode.R))
             {
-                PlayDoubleLoopClickWarning();
+                // Загружаем сцену заново (StageManager автоматически подтянет сохраненную стадию!)
+                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
             }
+            return; 
+        }
+
+        // Отремонтированный отладочный переход
+        if (Input.GetKeyDown(KeyCode.N))
+        {
+            AdvanceStageDebug();
+        }
+    }
+    
+    // Синхронизация стадии из StageManager при старте уровня
+    public void SyncStageOnLoad(int stageIndex)
+    {
+        if (stageIndex < (int)GameStage.Win)
+        {
+            currentStage = (GameStage)stageIndex;
+            TriggerStageStartMethod(currentStage);
+            Debug.Log("🔄 GameManager синхронизировал стадию при старте: " + currentStage);
         }
     }
 
-    public void RegisterLineDrawn()
+    public void SetCustomTutorialText(string text)
     {
-        if (currentStage != TutorialState.DrawLines && currentStage != TutorialState.EnergyNotice) return;
+        if (tutorialTextMesh == null) return;
+        if (IsGameOver) return;
 
-        linesDrawnCount++;
-
-        if (linesDrawnCount == 2)
-        {
-            currentStage = TutorialState.EnergyNotice;
-        }
-        else if (linesDrawnCount >= 4)
-        {
-            currentStage = TutorialState.KillPhantoms;
-            // Первого фантома спавним сразу, без задержки
-            SpawnPhantomEnemy(); 
-        }
-
-        UpdateTutorialText();
+        tutorialTextMesh.gameObject.SetActive(text != "");
+        tutorialTextMesh.text = text;
+        tutorialTextMesh.color = Color.white;
     }
 
-    public void RegisterPhantomKilled()
+    public void TriggerGameOver()
     {
-        if (currentStage != TutorialState.KillPhantoms) return;
+        if (IsGameOver) return;
 
-        phantomsKilledCount++;
-        UpdateTutorialText();
-
-        if (phantomsKilledCount >= 3)
+        currentStage = GameStage.GameOver; 
+        
+        if (tutorialTextMesh != null)
         {
-            currentStage = TutorialState.Complete;
-            UpdateTutorialText();
-            // Запускаем таймер на скрытие текста через 5 секунд
-            StartCoroutine(HideTutorialTextAfterDelay(5f));
-            Debug.Log("🎉 Обучение успешно завершено!");
+            tutorialTextMesh.gameObject.SetActive(true);
+            tutorialTextMesh.text = "GAME OVER! PRESS R TO RESTART STAGE";
+        }
+        
+        Debug.Log("💀 Игра окончена! Персонаж уничтожен.");
+    }
+
+    public void TriggerWin()
+    {
+        if (IsGameOver) return;
+
+        currentStage = GameStage.Win; 
+        StageManager.ResetSavedStage(); // Сбрасываем прогресс стадий, так как игра пройдена!
+        
+        if (tutorialTextMesh != null)
+        {
+            tutorialTextMesh.gameObject.SetActive(true);
+            tutorialTextMesh.text = "YOU WIN! PERFECT SIMULATION COMPLETED! PRESS R";
+        }
+        
+        Debug.Log("🎉 Победа! Все стадии StageManager успешно пройдены.");
+    }
+
+    public void RegisterEnemyKilled()
+    {
+        stageKillsCount++; 
+
+        if (currentStage == GameStage.Stage1_TutorialAndDefaultEnemies)
+        {
+            if (tutorialTextMesh != null) tutorialTextMesh.text = "STAGE 1: DESTROY INCOMING ENEMIES!";
+        }
+        else if (currentStage == GameStage.Stage2_Shotgun)
+        {
+            if (tutorialTextMesh != null) tutorialTextMesh.text = "STAGE 2: SWARMS DETECTED! USE SHOTGUN!";
+        }
+        else if (currentStage == GameStage.Stage3_Ricochet)
+        {
+            if (tutorialTextMesh != null) tutorialTextMesh.text = "STAGE 3: RICOCHET MODE ACTIVE!";
+        }
+    }
+
+    private void UpdateStageUI() {}
+
+    // --- МЕТОДЫ СТАДИЙ ---
+    private void StartStage1_DefaultEnemies()
+    {
+        Debug.Log("🚀 Началась Стадия 1: Дефолтные враги.");
+        stageKillsCount = 0;
+    }
+
+    private void StartStage2_Shotgun()
+    {
+        Debug.Log("🔥 Началась Стадия 2: Дробовик на 5 пуль.");
+        stageKillsCount = 0; 
+    }
+
+    private void StartStage3_Ricochet()
+    {
+        Debug.Log("🧱 Началась Стадия 3: Рикошеты от стен.");
+        stageKillsCount = 0;
+    }
+
+    private void StartStage4_Laser()
+    {
+        Debug.Log("⚡ Началась Стадия 4: Лазер с нагревом.");
+        stageKillsCount = 0;
+    }
+
+    private void StartStage5_Bulldozer()
+    {
+        Debug.Log("👾 СТАДИЯ 5: ВНИМАНИЕ! ОБНАРУЖЕНА МАТЬ ВСЕХ ТВАРЕЙ!");
+        stageKillsCount = 0;
+
+        // ТОЧЕЧНЫЙ ФИКС: Запускаем спавн босса с задержкой в 5 секунд, пока висит надпись
+        StartCoroutine(SpawnBossWithDelay(5f));
+    }
+
+    private IEnumerator SpawnBossWithDelay(float delay)
+    {
+        // Ждем ровно 5 секунд (пока на экране горит заставка STAGE 5)
+        yield return new WaitForSeconds(delay);
+
+        if (bossPrefab != null)
+        {
+            // Только теперь, когда заставка кончилась, спавним босса за экраном
+            Vector3 spawnPos = new Vector3(-8.0f, 0.14f, 0.0f); 
+            Instantiate(bossPrefab, spawnPos, Quaternion.identity);
+            Debug.Log("👾 Босс успешно заспавнен после 5-секундного ожидания!");
         }
         else
         {
-            // ЗАДЕРЖКА В 2 СЕКУНДЫ: вызываем метод спавна через встроенный таймер Unity
-            Invoke(nameof(SpawnPhantomEnemy), 2f);
+            Debug.LogError("❌ ОШИБКА: Префаб босса забыли перетащить в инспектор GameManager!");
         }
     }
 
-    private void SpawnPhantomEnemy()
+
+
+    // --- СИСТЕМНЫЕ МЕТОДЫ И ОТЛАДКА ---
+
+    // Полностью исправленная функция отладки для клавиши N
+    public void AdvanceStageDebug()
     {
-        if (phantomEnemyPrefab == null) return;
+        if (IsGameOver) return;
 
-        Vector3 spawnPos = Vector3.zero;
+        // 1. Моментально зачищаем сцену от старых врагов и осколков
+        ClearAllStageRemnants();
 
-        if (phantomsKilledCount == 0) spawnPos = new Vector3(1.44f, 0.14f, 0f);
-        else if (phantomsKilledCount == 1) spawnPos = new Vector3(-1.94f, 2.30f, 0f);
-        else spawnPos = new Vector3(-1.94f, -2.02f, 0f);
+        // 2. Сбрасываем старые таймеры заставок
+        StopAllCoroutines(); 
 
-        Instantiate(phantomEnemyPrefab, spawnPos, Quaternion.identity);
-    }
-
-    private void UpdateTutorialText()
-    {
-        if (tutorialTextMesh == null) return;
-
-        switch (currentStage)
+        // 3. Передаем управление в StageManager — пусть он сам переключит на следующую стадию
+        if (StageManager.Instance != null)
         {
-            case TutorialState.DrawLines:
-                tutorialTextMesh.text = $"HOLD LMB TO DRAW SHAPES! ({linesDrawnCount}/4)";
-                break;
-            case TutorialState.EnergyNotice:
-                tutorialTextMesh.text = $"CAUTION! DRAWING CONSUMES ENERGY SCALE! ({linesDrawnCount}/4)";
-                break;
-            case TutorialState.KillPhantoms:
-                tutorialTextMesh.text = $"PHANTOM DETECTED! PUSH SHAPES TO DESTROY IT! ({phantomsKilledCount}/3)";
-                break;
-            case TutorialState.Complete:
-                tutorialTextMesh.text = "TUTORIAL COMPLETE! PREPARE FOR SIMULATION.";
-                break;
+            StageManager.Instance.ForceSkipToNextStage();
         }
     }
 
-    // Корутина для плавного исчезновения финального текста
-    private IEnumerator HideTutorialTextAfterDelay(float delay)
-    {
-        yield return new WaitForSeconds(delay);
-        if (tutorialTextMesh != null)
-        {
-            // Плавно скрываем за полсекунды через DOTween
-            tutorialTextMesh.DOFade(0f, 0.5f).OnComplete(() => {
-                tutorialTextMesh.gameObject.SetActive(false);
-            });
-        }
-    }
 
-    private void PlayDoubleLoopClickWarning()
+    public void PlayDoubleLoopClickWarning()
     {
+        if (IsGameOver) return;
+
         energyBarFillImage.DOKill();
         energyBarFillImage.transform.DOKill();
         energyBarFillImage.color = normalGameplayColor;
         energyBarFillImage.transform.localScale = originalScale;
-
         energyBarFillImage.DOColor(clickWarningColor, animationDuration).SetLoops(4, LoopType.Yoyo).SetEase(Ease.InOutSine);
         energyBarFillImage.transform.DOScaleY(originalScale.y * pulseScaleY, animationDuration).SetLoops(4, LoopType.Yoyo).SetEase(Ease.InOutSine);
     }
@@ -179,4 +254,69 @@ public class GameManager : MonoBehaviour
             energyBarFillImage.transform.DOKill();
         }
     }
+    
+    public int GetStageKillsCount() => stageKillsCount;
+    
+    public void ClearAllStageRemnants()
+    {
+        GameObject[] enemies = GameObject.FindGameObjectsWithTag("Enemy");
+        foreach (GameObject enemy in enemies)
+        {
+            Destroy(enemy);
+        }
+
+        EnemyPiece[] pieces = GameObject.FindObjectsOfType<EnemyPiece>();
+        foreach (EnemyPiece piece in pieces)
+        {
+            Destroy(piece.gameObject);
+        }
+    
+        Debug.Log("🧹 Сцена полностью очищена от остатков прошлой стадии!");
+    }
+    
+    // Метод переключения логики при смене стадии
+    private void TriggerStageStartMethod(GameStage stage)
+    {
+        switch (stage)
+        {
+            case GameStage.Stage1_TutorialAndDefaultEnemies: StartStage1_DefaultEnemies(); break;
+            case GameStage.Stage2_Shotgun:                   StartStage2_Shotgun(); break;
+            case GameStage.Stage3_Ricochet:                  StartStage3_Ricochet(); break;
+            case GameStage.Stage4_Laser:                     StartStage4_Laser(); break;
+            case GameStage.Stage5_Bulldozer:                 StartStage5_Bulldozer(); break;
+        }
+    }
+    
+    // Метод для корректного перехода на следующую стадию без двойных инкрементов
+    public void SwitchToStage(int stageIndex)
+    {
+        if (IsGameOver) return;
+
+        // ТОЧЕЧНЫЙ ФИКС: Если пришел индекс 5-й стадии (Босса)
+        if (stageIndex == 4)
+        {
+            // Выключаем корутины StageManager, чтобы он не успел объявить победу раньше времени
+            if (StageManager.Instance != null) StageManager.Instance.StopAllCoroutines();
+
+            currentStage = GameStage.Stage5_Bulldozer;
+            TriggerStageStartMethod(currentStage);
+            Debug.Log("👾 GameManager: Перехвачен индекс 4! Спавним Босса.");
+            return;
+        }
+
+        // Твой старый код ниже остается без изменений:
+        if (stageIndex < (int)GameStage.Win)
+        {
+            currentStage = (GameStage)stageIndex;
+            TriggerStageStartMethod(currentStage);
+            Debug.Log("🎯 Оружие успешно переключено на стадию: " + currentStage);
+        }
+        else
+        {
+            TriggerWin();
+        }
+    }
+
+
+
 }
