@@ -31,6 +31,7 @@ public class EnemySpawner : MonoBehaviour
             yield return StartCoroutine(SpawnSwarmRoutine(warningPosition, baseOutsidePos, count));
         }
     }
+    public GameObject EnemyPrefab => enemyPrefab; 
 
     // ЛОГИКА ЦЕПОЧКИ: Враги выходят друг за другом из одной точки
     private IEnumerator SpawnChainRoutine(Vector3 warningPos, Vector3 spawnPos, int count)

@@ -86,32 +86,34 @@ public class StageManager : MonoBehaviour
 
     if (GameManager.Instance != null)
     {
-        GameManager.Instance.SetCustomTutorialText("ОТЛИЧНО!ПРОДОЛЖАЙТЕ ДВИЖЕНИЕ (5 СЕК)...");
+        GameManager.Instance.SetCustomTutorialText("OK, GRATE!");
     }
 
     yield return new WaitForSeconds(5f);
 
     // --- ПОДСТАДИЯ 2: УЧИМ СТРЕЛЯТЬ ---
+    // --- ПОДСТАДИЯ 2: УЧИМ СТРЕЛЯТЬ ---
     if (GameManager.Instance != null)
     {
-        GameManager.Instance.SetCustomTutorialText("ИСПОЛЬЗУЙТЕ ЛКМ, ЧТОБЫ УНИЧТОЖИТЬ МИШЕНИ!");
+        GameManager.Instance.SetCustomTutorialText("LMB to SHOOT!");
     }
 
-    // Спавним 3 неподвижные мишени в центре экрана для тренировки
+    // ТОЧЕЧНОЕ ИСПРАВЛЕНИЕ: Берем правильный EnemyPrefab с большой буквы из скрипта EnemySpawner
     if (spawner != null)
     {
-        // Используем ручной спавн префаба врага прямо на экран
-        Instantiate(spawner.GetComponent<EnemySpawner>().enemyPrefab, new Vector3(-3f, 0f, 0f), Quaternion.identity);
-        Instantiate(spawner.GetComponent<EnemySpawner>().enemyPrefab, new Vector3(-1f, 1f, 0f), Quaternion.identity);
-        Instantiate(spawner.GetComponent<EnemySpawner>().enemyPrefab, new Vector3(0f, -1f, 0f), Quaternion.identity);
+        EnemySpawner spawnerScript = spawner.GetComponent<EnemySpawner>();
+        
+        Instantiate(spawnerScript.EnemyPrefab, new Vector3(-5f, 0f, 0f), Quaternion.identity);
+        Instantiate(spawnerScript.EnemyPrefab, new Vector3(-3f, 0f, 0f), Quaternion.identity);
     }
 
-    // Ждем, пока игрок не уничтожит все мишени (все объекты с тегом "Enemy")
+    // Ждем, пока игрок не уничтожит все мишени
     yield return new WaitUntil(() => GameObject.FindGameObjectsWithTag("Enemy").Length == 0);
+
 
     if (GameManager.Instance != null)
     {
-        GameManager.Instance.SetCustomTutorialText("ОБУЧЕНИЕ ЗАВЕРШЕНО! НАЧАЛО СИМУЛЯЦИИ...");
+        GameManager.Instance.SetCustomTutorialText("Tutorial completed!!!");
     }
 
     yield return new WaitForSeconds(3f);
