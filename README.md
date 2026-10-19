@@ -6,8 +6,11 @@ This repository contains the post-jam stability update (**v1.0.1**) for the game
 
 This update is **strictly a bug-fix and stabilization patch**. No new content, features, or gameplay mechanics have been introduced during the non-competitive period. All modifications were made solely to resolve critical workflow blockers and polish existing implementations.
 
-For full transparency, the original, untouched jam submission build and source code are available for compliance review here:
-👉 [Link to Original Jam Version v1.0] (Replace with your actual link, e.g., GitHub Release or Branch)
+For full transparency, the original, untouched jam submission source code is available for compliance review here:
+👉 https://github.com/Ivan-Mikov/Ludum-Dare-60/tree/v1.0-jam-submission
+
+And build is available here:
+👉 https://github.com/Ivan-Mikov/Ludum-Dare-60/releases/tag/v1.0
 
 ---
 
@@ -23,7 +26,7 @@ The fixes are prioritized by their severity, starting with critical progression 
 
 ### 2. Main Menu & Gameplay Restrictions
 
-- **Restricted Main Menu Inputs:** Fixed an issue where the player character could inputs movement (WASD/Arrows) and fire projectiles while the Main Menu UI panel was active. Input handling is now properly suspended outside active gameplay.
+- **Restricted Main Menu Inputs:** Fixed an issue where the player character could input movement (WASD/Arrows) and fire projectiles while the Main Menu UI panel was active. Input handling is now properly suspended outside active gameplay.
 
 ### 3. Tutorial Scene Overhaul & Script Corrections
 
@@ -40,6 +43,6 @@ The fixes are prioritized by their severity, starting with critical progression 
 
 ## Technical Specifications
 
-- **Engine Version:** Unity (2022.3+ / Specify your version)
+- **Engine Version:** Unity (6000.3.11f1)
 - **Input System:** Keyboard & Mouse (WASD / Arrows to move, LMB to shoot)
 - **Current Version:** v1.0.1 (Patch)
