@@ -68,36 +68,56 @@ public class PlayerController : MonoBehaviour
 
 
     void Update()
+{
+    // Проверяем, идет ли сейчас активная игра (или туториал)
+    bool isGameplayActive = true;
+    if (StageManager.Instance != null && !StageManager.Instance.IsGameStarted)
     {
-        // Если панель меню существует и она АКТИВНА на сцене — блокируем всё управление
-        if (menuPanel != null && menuPanel.activeSelf) 
+        if (!StageManager.Instance.IsTutorialActive)
         {
-            if (spawnedLaser != null && spawnedLaser.gameObject.activeSelf) spawnedLaser.DeactivateBeam();
-            ToggleTripleLasers(false);
-            return; 
+            isGameplayActive = false; // Мы в главном меню, обычная игра не запущена
         }
-        // ---- НОВЫЙ БЛОК: СБРОС ПРИ СМЕНЕ СТАДИИ ----
+    }
+
+    // Если открыта панель настроек/паузы во время игры, тоже блокируем стрельбу
+    if (menuPanel != null && menuPanel.activeSelf)
+    {
+        isGameplayActive = false;
+    }
+
+    // ---- ЕСЛИ СТРЕЛЬБА ЗАБЛОКИРОВАНА (В МЕНЮ) ----
+    if (!isGameplayActive)
+    {
+        // Принудительно выключаем лучи лазеров, если они физически горели
+        if (spawnedLaser != null && spawnedLaser.gameObject.activeSelf) spawnedLaser.DeactivateBeam();
+        ToggleTripleLasers(false);
+        
+        // ВАЖНО: Не делаем return! Пропускаем код мимо стрельбы сразу к прицеливанию
+    }
+    else
+    {
+        // ---- СТАНДАРТНЫЙ БЛОК: СБРОС ПРИ СМЕНЕ СТАДИИ (работает только в игре) ----
         if (GameManager.Instance != null)
         {
             GameManager.GameStage currentStage = GameManager.Instance.CurrentStage;
         
-            // Если стадия изменилась по сравнению с прошлым кадром
             if (currentStage != lastCheckedStage)
             {
-                currentAmmo = 0f;          // Обнуляем шкалу энергии
-                isLaserFiring = false;     // Выключаем флаг обычного лазера
-                isTripleLaserFiring = false; // Выключаем флаг тройного лазера
+                currentAmmo = 0f;          
+                isLaserFiring = false;     
+                isTripleLaserFiring = false; 
             
-                // Выключаем лучи физически, чтобы они не зависли горящими
                 if (spawnedLaser != null) spawnedLaser.DeactivateBeam();
                 ToggleTripleLasers(false);
             
-                lastCheckedStage = currentStage; // Запоминаем новую стадию
+                lastCheckedStage = currentStage; 
             }
         }
-        // --------------------------------------------
+    }
 
-        // Проверяем стадии через логические переменные
+    // ---- БОЕВАЯ ЛОГИКА (Выполняется, только если мы НЕ в главном меню) ----
+    if (isGameplayActive)
+    {
         bool isBossStage = (GameManager.Instance != null && GameManager.Instance.CurrentStage == GameManager.GameStage.Stage5_Bulldozer);
         bool isLaserStage = (GameManager.Instance != null && GameManager.Instance.CurrentStage == GameManager.GameStage.Stage4_Laser);
 
@@ -118,26 +138,47 @@ public class PlayerController : MonoBehaviour
             HandleShooting();
             HandleAmmoRecharge();
         }
-
-        RotateGunTowardsCursor(); 
     }
+
+    // ---- ПРИЦЕЛИВАНИЕ ЗА КУРСОРОМ (Работает ВСЕГДА, в том числе и в Главном Меню!) ----
+    RotateGunTowardsCursor(); 
+}
+
 
 
 
 
     void FixedUpdate()
     {
-        // Если меню открыто — не даем двигаться и флипаться
+        // ---- ПОДВИЖНЫЙ СПРАЙТ (Работает ВСЕГДА, в том числе и в Главном Меню!) ----
+        // Разворачиваем персонажа влево/вправо за мышкой в любом состоянии игры
+        FlipCharacterTowardsCursor(); 
+
+        // ---- БЛОКИРОВКА ХОДЬБЫ В ГЛАВНОМ МЕНЮ ----
+        // Если игра в StageManager еще не началась (и это не туториал) — запрещаем бегать
+        if (StageManager.Instance != null && !StageManager.Instance.IsGameStarted)
+        {
+            if (!StageManager.Instance.IsTutorialActive)
+            {
+                if (rb != null) rb.linearVelocity = Vector2.zero; // Полностью гасим скорость
+                animator.SetBool("isRunning", false); // Принудительно включаем Idle-анимацию
+                return; // Выходим из метода, не давая персонажу сдвинуться с места
+            }
+        }
+
+        // Если открыта панель паузы/настроек во время геймплея — тоже стопорим игрока
         if (menuPanel != null && menuPanel.activeSelf) 
         {
-            if (rb != null) rb.linearVelocity = Vector2.zero; // Гасим инерцию, если она есть
+            if (rb != null) rb.linearVelocity = Vector2.zero; 
             animator.SetBool("isRunning", false);
             return; 
         }
 
+        // ---- ГЕЙМПЛЕЙНОЕ ПЕРЕМЕЩЕНИЕ (Работает только в бою или туториале) ----
         HandleMovement();
-        FlipCharacterTowardsCursor(); 
     }
+
+
 
     private void HandleMovement()
     {

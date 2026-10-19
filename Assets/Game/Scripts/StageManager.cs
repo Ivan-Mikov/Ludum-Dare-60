@@ -8,8 +8,13 @@ public class StageManager : MonoBehaviour
 
     public static StageManager Instance { get; private set; }
 
-    // Статическая переменная сохраняет индекс стадии ДАЖЕ после перезагрузки сцены через SceneManager
-    private static int savedStageIndex = 0;
+    // Статическая переменная сохраняет стадию ДАЖЕ после перезагрузки сцены
+    private static GameManager.GameStage savedStage = GameManager.GameStage.Stage1_TutorialAndDefaultEnemies;
+// Флаг указывает, что сцена перезагружена кнопкой R из-за проигрыша
+    public static bool IsRestartingAfterDeath { get;  set; } = false;
+// Добавьте это в любое место внутри класса StageManager (например, рядом с GetCurrentStage):
+    public bool IsGameStarted => isGameStarted;
+    public bool IsTutorialActive => isTutorialActive;
 
     public enum SpawnType { Chain, Swarm }
 
@@ -33,31 +38,55 @@ public class StageManager : MonoBehaviour
     [Header("Настройки стадий")]
     [SerializeField] private List<StageSetup> stages;
 
-    private int currentStageIndex = 0;
+    private GameManager.GameStage currentStage = GameManager.GameStage.Stage1_TutorialAndDefaultEnemies;
     private int currentWaveIndex = 0;
     private bool isWaveRunning = false;
     private bool isPreparingStage = false; 
     private EnemySpawner spawner;
-    private bool isGameStarted = false; // По умолчанию игра НЕ запущена (ждем меню)
+    private bool isGameStarted = false; 
 
+    // Вспомогательное свойство для получения правильного индекса в списке stages (математический сдвиг)
+    private int ListIndex => (int)currentStage - 1;
 
     void Awake()
     {
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
 
-        // Восстанавливаем стадию, на которой игрок проиграл
-        currentStageIndex = savedStageIndex;
+        currentStage = savedStage;
     }
 
     void Start()
     {
         spawner = GameObject.FindObjectOfType<EnemySpawner>();
-        
-        // УДАЛЯЕМ ИЛИ КОММЕНТИРУЕМ эти строки, чтобы игра не стартовала сама:
-        // if (GameManager.Instance != null) GameManager.Instance.SyncStageOnLoad(currentStageIndex);
-        // StartCurrentStage();
+
+        // ПРОВЕРКА: Если мы перезагрузились кнопкой R после смерти
+        if (IsRestartingAfterDeath)
+        {
+            isGameStarted = true; // Сразу разрешаем игровой цикл Update
+
+            // Сбрасываем флаг, чтобы при обычном выходе в меню игра снова ждала клика кнопки
+            IsRestartingAfterDeath = false; 
+
+            // Ищем на сцене Canvas/MenuPanel и насильно скрываем её, чтобы не нажимать кнопку повторно
+            // Мы ищем GameManager, так как в нем уже заведена ссылка на menuPanel
+            if (GameManager.Instance != null)
+            {
+                // Синхронизируем стадию в GameManager
+                GameManager.Instance.SyncStageOnLoad(currentStage);
+
+                // Насильно скрываем меню через метод, который мы добавим в GameManager ниже
+                GameManager.Instance.HideMenuPanelDirectly();
+            }
+
+            // Мгновенно запускаем геймплей
+            StartCurrentStage();
+            Debug.Log("💀 StageManager: Обнаружен перезапуск после смерти! Меню скрыто, стадия запущена: " + currentStage);
+        }
     }
+
+
+
     public void StartTutorialFromMenu()
     {
         isGameStarted = true;
@@ -65,92 +94,139 @@ public class StageManager : MonoBehaviour
 
         if (GameManager.Instance != null)
         {
-            GameManager.Instance.SetCustomTutorialText("ИСПОЛЬЗУЙТЕ WASD ИЛИ СТРЕЛКИ ДЛЯ ХОДЬБЫ");
+            GameManager.Instance.SetCustomTutorialText("USE WASD OR ARROW KEYS TO MOVE");
         }
 
         StartCoroutine(TutorialRoutine());
     }
     
     private IEnumerator TutorialRoutine()
-{
-    PlayerController player = FindObjectOfType<PlayerController>();
-    
-    // --- ПОДСТАДИЯ 1: УЧИМ ХОДИТЬ ---
-    // Ждем, пока игрок нажмет хоть одну кнопку движения (мы используем флаг hasMoved, который уже есть у вас в PlayerController!)
-    if (player != null)
     {
-        // На всякий случай сбрасываем флаг, если игрок случайно нажал кнопку в меню
-        // Если переменная hasMoved private в PlayerController, временно сделайте её public или воспользуйтесь осями:
+        if (SoundManager.Instance != null)
+        {
+            SoundManager.Instance.PlayMusic(SoundManager.MusicTrack.Normal);
+        }
+
+        // --- ПОДСТАДИЯ 1: УЧИМ ХОДИТЬ ---
         yield return new WaitUntil(() => Input.GetAxisRaw("Horizontal") != 0 || Input.GetAxisRaw("Vertical") != 0);
-    }
-
-    if (GameManager.Instance != null)
-    {
-        GameManager.Instance.SetCustomTutorialText("OK, GRATE!");
-    }
-
-    yield return new WaitForSeconds(5f);
-
-    // --- ПОДСТАДИЯ 2: УЧИМ СТРЕЛЯТЬ ---
-    // --- ПОДСТАДИЯ 2: УЧИМ СТРЕЛЯТЬ ---
-    if (GameManager.Instance != null)
-    {
-        GameManager.Instance.SetCustomTutorialText("LMB to SHOOT!");
-    }
-
-    // ТОЧЕЧНОЕ ИСПРАВЛЕНИЕ: Берем правильный EnemyPrefab с большой буквы из скрипта EnemySpawner
-    if (spawner != null)
-    {
-        EnemySpawner spawnerScript = spawner.GetComponent<EnemySpawner>();
-        
-        Instantiate(spawnerScript.EnemyPrefab, new Vector3(-5f, 0f, 0f), Quaternion.identity);
-        Instantiate(spawnerScript.EnemyPrefab, new Vector3(-3f, 0f, 0f), Quaternion.identity);
-    }
-
-    // Ждем, пока игрок не уничтожит все мишени
-    yield return new WaitUntil(() => GameObject.FindGameObjectsWithTag("Enemy").Length == 0);
-
-
-    if (GameManager.Instance != null)
-    {
-        GameManager.Instance.SetCustomTutorialText("Tutorial completed!!!");
-    }
-
-    yield return new WaitForSeconds(3f);
-    
-    // Обучение плавно перетекает в обычную 1-ю стадию геймплея
-    isTutorialActive = false;
-    currentStageIndex = 0; 
-    
-    if (GameManager.Instance != null)
-    {
-        GameManager.Instance.SwitchToStage(0); // Включает Stage1 (индекс 0 в вашем SwitchToStage)
-    }
-    
-    StartCurrentStage();
-}
-
-
-    // Этот метод вызовется из MainMenuController, когда игрок нажмет кнопку сложности
-    public void StartGameFromMenu()
-    {
-        isGameStarted = true; // <-- РАЗРЕШАЕМ ИГРУ
+        yield return new WaitForSeconds(3f);
 
         if (GameManager.Instance != null)
         {
-            GameManager.Instance.SyncStageOnLoad(currentStageIndex);
+            GameManager.Instance.SetCustomTutorialText("OK, GREAT!");
+        }
+        yield return new WaitForSeconds(3f);
+
+        // --- ПОДСТАДИЯ 2: УЧИМ СТРЕЛЯТЬ (4 МИШЕНИ) ---
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.SetCustomTutorialText("LMB TO SHOOT TARGETS!");
+        }
+
+        if (GameManager.Instance != null && GameManager.Instance.phantomEnemyPrefab != null)
+        {
+            GameObject prefab = GameManager.Instance.phantomEnemyPrefab;
+            Instantiate(prefab, new Vector3(-4.0f, 0.6f, 0f), Quaternion.identity);  
+            Instantiate(prefab, new Vector3(0.2f, 0.6f, 0f), Quaternion.identity);   
+            Instantiate(prefab, new Vector3(-4.0f, -1.0f, 0f), Quaternion.identity); 
+            Instantiate(prefab, new Vector3(0.2f, -1.0f, 0f), Quaternion.identity);  
+        }
+
+        // Ждем уничтожения первых двух
+        yield return new WaitUntil(() => GameObject.FindGameObjectsWithTag("Enemy").Length <= 2);
+
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.SetCustomTutorialText("WEAPON ENERGY DEPLETED! WAIT FOR RECHARGE!");
+        }
+
+        // Ждем уничтожения всех четырех начальных мишеней
+        yield return new WaitUntil(() => GameObject.FindGameObjectsWithTag("Enemy").Length == 0);
+        yield return new WaitForSeconds(1.5f);
+
+        // --- ПОДСТАДИЯ 3: УЧИМ ПРОШИБАТЬ (3 В РЯД БЛИЗКО + ОДНОВРЕМЕННО С ТЕКСТОМ) ---
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.SetCustomTutorialText("ONE BULLET CAN PIERCE MULTIPLE ENEMIES!");
+        }
+
+        if (GameManager.Instance != null && GameManager.Instance.phantomEnemyPrefab != null)
+        {
+            GameObject prefab = GameManager.Instance.phantomEnemyPrefab;
+            // Спавним 3 фантома ОЧЕНЬ близко друг к другу (шаг 0.5f вместо 1.5f) по горизонтали (Y = 0.0f)
+            Instantiate(prefab, new Vector3(-2.4f, 0.0f, 0f), Quaternion.identity);
+            Instantiate(prefab, new Vector3(-1.9f, 0.0f, 0f), Quaternion.identity);
+            Instantiate(prefab, new Vector3(-1.4f, 0.0f, 0f), Quaternion.identity);
+        }
+
+        // Ждем, пока игрок расправится с этой тройкой
+        yield return new WaitUntil(() => GameObject.FindGameObjectsWithTag("Enemy").Length == 0);
+        yield return new WaitForSeconds(1f);
+
+        // --- ПОДСТАДИЯ 4: ЗАКРЕПЛЕНИЕ (5 В РЯД БЛИЗКО + ОДНОВРЕМЕННО С ТЕКСТОМ) ---
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.SetCustomTutorialText("ONE MORE!");
+        }
+
+        if (GameManager.Instance != null && GameManager.Instance.phantomEnemyPrefab != null)
+        {
+            GameObject prefab = GameManager.Instance.phantomEnemyPrefab;
+            // Спавним 5 фантомов в один супер-плотный ряд (шаг 0.5f)
+            Instantiate(prefab, new Vector3(-2.9f, 0.0f, 0f), Quaternion.identity);
+            Instantiate(prefab, new Vector3(-2.4f, 0.0f, 0f), Quaternion.identity);
+            Instantiate(prefab, new Vector3(-1.9f, 0.0f, 0f), Quaternion.identity);
+            Instantiate(prefab, new Vector3(-1.4f, 0.0f, 0f), Quaternion.identity);
+            Instantiate(prefab, new Vector3(-0.9f, 0.0f, 0f), Quaternion.identity);
+        }
+
+        // Ждем полного уничтожения пяти мишеней
+        yield return new WaitUntil(() => GameObject.FindGameObjectsWithTag("Enemy").Length == 0);
+        yield return new WaitForSeconds(1f);
+
+        // --- ПОДСТАДИЯ 5: ПРЕДУПРЕЖДЕНИЕ ОБ ОПАСНОСТИ ---
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.SetCustomTutorialText("CAREFUL! REAL ENEMIES CAN BITE!");
+        }
+        yield return new WaitForSeconds(4f);
+
+        // --- ФИНАЛ ОБУЧЕНИЯ ---
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.SetCustomTutorialText("TUTORIAL PASSED!!!");
+        }
+        yield return new WaitForSeconds(3f);
+
+        // Полный сброс и выход в чистое Главное Меню через перезагрузку
+        isTutorialActive = false;
+        isGameStarted = false;
+        ResetSavedStage();
+        
+        UnityEngine.SceneManagement.SceneManager.LoadScene(
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex
+        );
+    }
+
+
+
+    public void StartGameFromMenu()
+    {
+        isGameStarted = true; 
+
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.SyncStageOnLoad(currentStage);
         }
 
         StartCurrentStage();
         Debug.Log("🎮 Игра успешно запущена из главного меню!");
     }
 
-
-
     void Update()
     {
         if (isTutorialActive) return; 
-        if (!isGameStarted) return; // <-- ЕСЛИ ИГРА НЕ ЗАПУЩЕНА, НИЧЕГО НЕ ДЕЛАЕМ!
+        if (!isGameStarted) return; 
 
         if (GameManager.Instance != null && GameManager.Instance.IsGameOver) return;
         if (isPreparingStage) return; 
@@ -164,10 +240,13 @@ public class StageManager : MonoBehaviour
             }
         }
     }
+// Добавьте это в любое место внутри класса StageManager:
+    public GameManager.GameStage GetCurrentStage() => currentStage;
 
-    private void StartCurrentStage()
+    public void StartCurrentStage()
     {
-        if (GameManager.Instance.CurrentStage == GameManager.GameStage.Stage5_Bulldozer)
+        // Обычная установка музыки
+        if (GameManager.Instance != null && GameManager.Instance.CurrentStage == GameManager.GameStage.Stage5_Bulldozer)
         {
             SoundManager.Instance.PlayMusic(SoundManager.MusicTrack.Boss);
         }
@@ -175,8 +254,9 @@ public class StageManager : MonoBehaviour
         {
             SoundManager.Instance.PlayMusic(SoundManager.MusicTrack.Normal);
         }
-        
-        if (currentStageIndex >= stages.Count)
+    
+        // Проверяем выход за пределы списка стадий
+        if (ListIndex < 0 || ListIndex >= stages.Count)
         {
             Debug.Log("🎉 ВСЕ СТАДИИ УСПЕШНО ПРОЙДЕНЫ! ИГРОК ПОБЕДИЛ!");
             if (GameManager.Instance != null)
@@ -186,22 +266,26 @@ public class StageManager : MonoBehaviour
             return;
         }
 
-        // Запоминаем текущую стадию на случай проигрыша
-        savedStageIndex = currentStageIndex;
+        // Сохраняем текущую стадию в статическую переменную (переживет перезагрузку)
+        savedStage = currentStage;
 
         currentWaveIndex = 0;
         isWaveRunning = true; 
 
+        // Запускаем корутину заставки
         StartCoroutine(StageIntroductionRoutine());
     }
+
+
 
     private IEnumerator StageIntroductionRoutine()
     {
         isPreparingStage = true;
 
-        if (GameManager.Instance != null)
+        if (GameManager.Instance != null && ListIndex >= 0 && ListIndex < stages.Count)
         {
-            string stageTitle = $"STAGE {currentStageIndex + 1} - {stages[currentStageIndex].stageName.ToUpper()}";
+            // Здесь выводим красивый номер стадии: из enum вычитаем туториал. Stage1 станет "STAGE 1"
+            string stageTitle = $"STAGE {(int)currentStage} - {stages[ListIndex].stageName.ToUpper()}";
             GameManager.Instance.SetCustomTutorialText(stageTitle);
         }
 
@@ -214,107 +298,101 @@ public class StageManager : MonoBehaviour
 
         isPreparingStage = false;
         isWaveRunning = false; 
-        Debug.Log($"⚔️ Заставка кончилась. Пошел спавн для: {stages[currentStageIndex].stageName}");
+        Debug.Log($"⚔️ Заставка кончилась. Пошел спавн для: {stages[ListIndex].stageName}");
     }
 
     private IEnumerator NextWaveRoutine()
-{
-    isWaveRunning = true;
-
-    if (currentStageIndex < stages[currentStageIndex].waves.Count)
     {
-        StageSetup currentStage = stages[currentStageIndex];
-        Wave currentWave = currentStage.waves[currentWaveIndex];
+        isWaveRunning = true;
+
+        // Фикс проверки: сравниваем текущую волну с количеством волн в текущей стадии списка
+        if (ListIndex >= 0 && ListIndex < stages.Count && currentWaveIndex < stages[ListIndex].waves.Count)
+        {
+            StageSetup stageSetup = stages[ListIndex];
+            Wave currentWave = stageSetup.waves[currentWaveIndex];
+                
+            List<Coroutine> activeSpawnCoroutines = new List<Coroutine>();
+
+            int finalGroupCount = currentWave.groupCount;
+            int finalEnemiesPerGroup = currentWave.enemiesPerGroup;
+
+            if (GameManager.CurrentDifficulty == GameManager.Difficulty.Hard)
+            {
+                finalGroupCount *= 2;
+                finalEnemiesPerGroup *= 2;
+            }
+
+            for (int i = 0; i < finalGroupCount; i++)
+            {
+                if (spawner != null)
+                {
+                    Coroutine c = StartCoroutine(spawner.ExecuteSpawnCommand(currentWave.spawnType, finalEnemiesPerGroup));
+                    activeSpawnCoroutines.Add(c);
+                }
+            }
+
+            foreach (var coroutine in activeSpawnCoroutines)
+            {
+                yield return coroutine;
+            }
+
+            yield return new WaitForSeconds(stageSetup.delayBetweenWaves);
+
+            currentWaveIndex++;
+            isWaveRunning = false;
+        }
+        else
+        {
+            // ЕСТЕСТВЕННЫЙ ПЕРЕХОД: Волны на этой стадии кончились
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.ClearAllStageRemnants(); 
+                
+                // Переходим на следующий Enum
+                currentStage++;
+                savedStage = currentStage; 
+
+                // Проверяем на победу (если вышли за пределы списка боевых стадий)
+                if (ListIndex >= stages.Count)
+                {
+                    savedStage = GameManager.GameStage.Stage1_TutorialAndDefaultEnemies;
+                    GameManager.Instance.TriggerWin();
+                }
+                else
+                {
+                    GameManager.Instance.SwitchToStage(currentStage);
+                    StartCurrentStage();
+                }
+            }
+        }
+    }
+
+    public void ForceSkipToNextStage()
+    {
+        StopAllCoroutines();
+        currentStage++;
+        
+        if (ListIndex >= stages.Count)
+        {
+            savedStage = GameManager.GameStage.Stage1_TutorialAndDefaultEnemies;
+            if (GameManager.Instance != null) GameManager.Instance.TriggerWin();
+        }
+        else
+        {
+            savedStage = currentStage;
             
-        List<Coroutine> activeSpawnCoroutines = new List<Coroutine>();
-
-        // --- КРИТИЧЕСКИЙ ФИКС ДЛЯ HARD MODE ---
-        int finalGroupCount = currentWave.groupCount;
-        int finalEnemiesPerGroup = currentWave.enemiesPerGroup;
-
-        // Если включен Hard Mode, умножаем пачки и врагов в них на 2
-        if (GameManager.CurrentDifficulty == GameManager.Difficulty.Hard)
-        {
-            finalGroupCount *= 2;
-            finalEnemiesPerGroup *= 2;
-        }
-
-        for (int i = 0; i < finalGroupCount; i++)
-        {
-            if (spawner != null)
+            if (GameManager.Instance != null)
             {
-                // Передаем измененное количество врагов
-                Coroutine c = StartCoroutine(spawner.ExecuteSpawnCommand(currentWave.spawnType, finalEnemiesPerGroup));
-                activeSpawnCoroutines.Add(c);
+                GameManager.Instance.SwitchToStage(currentStage);
             }
-        }
-        // ----------------------------------------
-
-        foreach (var coroutine in activeSpawnCoroutines)
-        {
-            yield return coroutine;
-        }
-
-        yield return new WaitForSeconds(currentStage.delayBetweenWaves);
-
-        currentWaveIndex++;
-        isWaveRunning = false;
-    }
-    else
-    {
-        // ЕСТЕСТВЕННЫЙ ПЕРЕХОД: Волны на этой стадии кончились
-        if (GameManager.Instance != null)
-        {
-            GameManager.Instance.ClearAllStageRemnants(); 
-            currentStageIndex++;
-            savedStageIndex = currentStageIndex; // Обновляем сохранение
-
-            // Проверяем на победу ДО переключения оружия
-            if (currentStageIndex >= stages.Count)
-            {
-                savedStageIndex = 0;
-                GameManager.Instance.TriggerWin();
-            }
-            else
-            {
-                // Говорим GameManager сменить пушку под новый индекс стадии
-                GameManager.Instance.SwitchToStage(currentStageIndex);
-                StartCurrentStage();
-            }
+            
+            StartCurrentStage();
         }
     }
-}
 
-// Специальный метод для дебага по кнопке N
-public void ForceSkipToNextStage()
-{
-    StopAllCoroutines();
-    currentStageIndex++;
-    
-    if (currentStageIndex >= stages.Count)
-    {
-        savedStageIndex = 0; // Сбрасываем при полной победе
-        if (GameManager.Instance != null) GameManager.Instance.TriggerWin();
-    }
-    else
-    {
-        savedStageIndex = currentStageIndex;
-        
-        // Синхронизируем пушку в GameManager под актуальный индекс
-        if (GameManager.Instance != null)
-        {
-            GameManager.Instance.SwitchToStage(currentStageIndex);
-        }
-        
-        StartCurrentStage();
-    }
-}
-
-
-    // Позволяет сбросить статическую переменную, если игрок выиграет или захочет начать заново из главного меню
     public static void ResetSavedStage()
     {
-        savedStageIndex = 0;
+        savedStage = GameManager.GameStage.Stage1_TutorialAndDefaultEnemies;
     }
     
     public void StopGameForMenu()
@@ -322,8 +400,9 @@ public void ForceSkipToNextStage()
         isGameStarted = false;
         isWaveRunning = false;
         isPreparingStage = false;
-        isTutorialActive = false; // <-- ДОБАВИЛИ СЮДА
-        currentStageIndex = 0; 
+        isTutorialActive = false; 
+        currentStage = GameManager.GameStage.Stage1_TutorialAndDefaultEnemies;
+        savedStage = GameManager.GameStage.Stage1_TutorialAndDefaultEnemies;
         currentWaveIndex = 0;
     
         if (GameManager.Instance != null)
@@ -333,5 +412,4 @@ public void ForceSkipToNextStage()
     
         StopAllCoroutines(); 
     }
-
 }

@@ -52,6 +52,14 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4853336011302424530, guid: 747296d27ecbcca4b9cc389ed2975f7c, type: 3}
+      propertyPath: m_BodyType
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4853336011302424530, guid: 747296d27ecbcca4b9cc389ed2975f7c, type: 3}
+      propertyPath: m_Constraints
+      value: 7
+      objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: 564900764956489454, guid: 747296d27ecbcca4b9cc389ed2975f7c, type: 3}
     m_RemovedGameObjects: []
@@ -78,7 +86,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b2fe2a51add287a4d9c620f4d8a585ec, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PhantomEnemy
-  moveSpeed: 1.2
   piecePrefabs:
   - {fileID: 6654093636929287918, guid: 57a3cfc399e36ea4ab76d6aa84881598, type: 3}
   minPieces: 4

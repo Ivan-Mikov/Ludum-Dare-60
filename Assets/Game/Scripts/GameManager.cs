@@ -32,8 +32,8 @@ public class GameManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI tutorialTextMesh; 
     [SerializeField] private Image energyBarFillImage;     
 
-    [Header("Настройки спавна фантомов (Стадия 1)")]
-    [SerializeField] private GameObject phantomEnemyPrefab; 
+    [Header("Настройки спавна фантомов (Стадия 0 - обучение)")]
+    [SerializeField] public GameObject phantomEnemyPrefab; 
 
     [Header("Настройки цвета шкалы энергии")]
     [SerializeField] private Color normalGameplayColor = Color.red; 
@@ -48,6 +48,8 @@ public class GameManager : MonoBehaviour
 
     [Header("Меню")]
     [SerializeField] private GameObject menuPanel; // Сюда перетащи ту же MenuPanel из Canvas
+    
+
 
     private Vector3 originalScale;
     private int stageKillsCount = 0; 
@@ -77,66 +79,57 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
-        // Проверяем нажатие кнопки перезапуска, только если игра официально завершена (Победа или Поражение)
         if (IsGameOver)
         {
             if (Input.GetKeyDown(KeyCode.R))
             {
-                // СЦЕНАРИЙ 1: Игрок ПОБЕДИЛ финального босса
-                // СЦЕНАРИЙ 1: Игрок победил босса — выходим в меню
+                // СЦЕНАРИЙ 1: Игрок ПОБЕДИЛ финального босса — перезагружаем сцену в чистое Главное Меню
                 if (currentStage == GameStage.Win)
                 {
-                    Debug.Log("🎉 Победный возврат в меню.");
+                    Debug.Log("🎉 Победный возврат в меню через перезагрузку сцены.");
 
-                    // 1. Сначала останавливаем и сбрасываем игровой цикл в StageManager
-                    if (StageManager.Instance != null)
-                    {
-                        StageManager.Instance.StopGameForMenu();
-                    }
+                    // Перед загрузкой обязательно сбрасываем статический флаг рестарта, 
+                    // чтобы игра открыла именно меню, а не кинулась сразу в бой
+                    StageManager.ResetSavedStage(); 
 
-                    // 2. СРАЗУ переводим стейдж в исходное состояние (иначе сработает блокировка GameOver)
-                    currentStage = GameStage.Stage1_TutorialAndDefaultEnemies;
-
-                    // 3. Теперь принудительно гасим и очищаем текст на экране
-                    if (tutorialTextMesh != null)
-                    {
-                        tutorialTextMesh.text = "";
-                        tutorialTextMesh.gameObject.SetActive(false);
-                    }
-
-                    // 4. Включаем панель главного меню обратно
-                    if (menuPanel != null)
-                    {
-                        menuPanel.SetActive(true);
-                    }
+                    // Перезагружаем сцену Unity
+                    SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
                 }
-
-                // СЦЕНАРИЙ 2: Игрок ПРОИГРАЛ (GameOver)
+                // СЦЕНАРИЙ 2: Игрок ПРОИГРАЛ (GameOver) — перезапуск этой же стадии
                 else if (currentStage == GameStage.GameOver)
                 {
                     Debug.Log("💀 Перезапускаем стадию, на которой игрок потерпел поражение...");
                 
-                    // Загружаем сцену заново (StageManager автоматически загрузит сохраненный индекс стадии)
+                    StageManager.IsRestartingAfterDeath = true;
                     SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
                 }
             }
-            return; // Если игра окончена, дальнейший код Update (кнопка N) не должен выполняться
+            return; 
         }
 
-        // Отладочный переход на следующую стадию во время геймплея
-        if (Input.GetKeyDown(KeyCode.N))
+        // if (Input.GetKeyDown(KeyCode.N))
+        // {
+        //     AdvanceStageDebug();
+        // }
+    }
+
+    public void HideMenuPanelDirectly()
+    {
+        if (menuPanel != null)
         {
-            AdvanceStageDebug();
+            menuPanel.SetActive(false);
+            Debug.Log("⚙️ GameManager: Панель главного меню скрыта автоматически при рестарте.");
         }
     }
 
+
     
     // Синхронизация стадии из StageManager при старте уровня
-    public void SyncStageOnLoad(int stageIndex)
+    public void SyncStageOnLoad(GameStage stage)
     {
-        if (stageIndex < (int)GameStage.Win)
+        if (stage < GameStage.Win)
         {
-            currentStage = (GameStage)stageIndex;
+            currentStage = stage;
             TriggerStageStartMethod(currentStage);
             Debug.Log("🔄 GameManager синхронизировал стадию при старте: " + currentStage);
         }
@@ -335,12 +328,12 @@ public class GameManager : MonoBehaviour
     }
 
     // Метод для корректного перехода на следующую стадию без двойных инкрементов
-    public void SwitchToStage(int stageIndex)
+    public void SwitchToStage(GameStage stage)
     {
         if (IsGameOver) return;
 
         // ТОЧЕЧНЫЙ ФИКС: Если пришел индекс 5-й стадии (Босса)
-        if (stageIndex == 4)
+        if (stage == GameStage.Stage5_Bulldozer)
         {
             // Выключаем корутины StageManager, чтобы он не успел объявить победу раньше времени
             if (StageManager.Instance != null) StageManager.Instance.StopAllCoroutines();
@@ -352,9 +345,9 @@ public class GameManager : MonoBehaviour
         }
 
         // Твой старый код ниже остается без изменений:
-        if (stageIndex < (int)GameStage.Win)
+        if (stage < GameStage.Win)
         {
-            currentStage = (GameStage)stageIndex;
+            currentStage = stage;
             TriggerStageStartMethod(currentStage);
             Debug.Log("🎯 Оружие успешно переключено на стадию: " + currentStage);
         }

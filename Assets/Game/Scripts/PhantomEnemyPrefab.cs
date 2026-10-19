@@ -2,105 +2,48 @@ using UnityEngine;
 
 public class PhantomEnemy : MonoBehaviour
 {
-    [Header("Настройки скорости")]
-    [SerializeField] private float moveSpeed = 1.2f; // Сделали скорость еще меньше, чтобы было легко попасть
-
     [Header("Эффект разрушения (Осколки)")]
-    [SerializeField] private GameObject[] piecePrefabs; // Сюда в инспекторе перетащи префабы осколков EnemyPiece
+    [SerializeField] private GameObject[] piecePrefabs; 
     [SerializeField] private int minPieces = 4;         
     [SerializeField] private int maxPieces = 7;         
-    [SerializeField] private float explosionForce = 3f; // Сила разлета осколков
-
-    private SpriteRenderer spriteRenderer;
-    private Vector2[] patrolPoints;
-    private int currentPointIndex = 0;
-    private bool isInsideScreen = false;
-    private Vector2 targetPosition;
-
-    void Awake()
-    {
-        spriteRenderer = GetComponent<SpriteRenderer>();
-    }
+    [SerializeField] private float explosionForce = 3f; 
 
     void Start()
     {
-        Rigidbody2D rb = GetComponent<Rigidbody2D>();
-        if (rb != null) rb.gravityScale = 0f;
-
-        // Точки патрулирования внутри экрана осциллографа
-        patrolPoints = new Vector2[]
+        // Настраиваем физику, чтобы объект был недвижимой стеной
+        if (TryGetComponent<Rigidbody2D>(out var rb))
         {
-            new Vector2(-4.5f, 1.8f),  
-            new Vector2(0.8f, 1.8f),   
-            new Vector2(0.8f, -1.5f),  
-            new Vector2(-4.5f, -1.5f)  
-        };
+            rb.bodyType = RigidbodyType2D.Kinematic; // Кинематический объект не сдвинуть обычным толчком
+            rb.linearVelocity = Vector2.zero;
+            rb.constraints = RigidbodyConstraints2D.FreezeAll; // Полная блокировка
+        }
 
-        targetPosition = patrolPoints[0];
+        // Гарантируем, что коллайдер твердый, а не прозрачный триггер
+        if (TryGetComponent<Collider2D>(out var col))
+        {
+            col.isTrigger = false;
+        }
 
-        UpdateSpriteDirection();
+        // Принудительно ставим тег для StageManager
+        gameObject.tag = "Enemy";
     }
 
-    void Update()
-    {
-        // Плавный полет от точки к точке
-        transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
-
-        if (Vector2.Distance(transform.position, targetPosition) < 0.1f)
-        {
-            if (!isInsideScreen)
-            {
-                isInsideScreen = true;
-            }
-
-            currentPointIndex = (currentPointIndex + 1) % patrolPoints.Length;
-            targetPosition = patrolPoints[currentPointIndex];
-
-            // Разворот спрайта при смене направления
-            UpdateSpriteDirection();
-        }
-    }
-
-    private void UpdateSpriteDirection()
-    {
-        if (spriteRenderer == null) return;
-
-        float directionX = targetPosition.x - transform.position.x;
-
-        if (directionX > 0.1f)
-        {
-            spriteRenderer.flipX = false; 
-        }
-        else if (directionX < -0.1f)
-        {
-            spriteRenderer.flipX = true; 
-        }
-    }
-
-    private void OnCollisionEnter2D(Collision2D collision)
-    {
-        if (GameManager.Instance != null && GameManager.Instance.IsGameOver) return;
-
-        // Если фантом врезался в игрока, тоже можно засчитать урон/проигрыш
-        if (collision.gameObject.CompareTag("Player"))
-        {
-            if (GameManager.Instance != null) GameManager.Instance.TriggerGameOver();
-        }
-    }
-
+    // Так как IsTrigger выключен, Unity вызывает OnCollisionEnter2D вместо OnTriggerEnter2D
     private void OnTriggerEnter2D(Collider2D other)
     {
-        // Если фантом прошит пулей
-        if (other.GetComponent<Bullet>() != null)
-        {
-            ExplodeIntoPieces();
+        SoundManager.Instance.PlaySFX(SoundManager.SoundEffect.EnemyDeath);
+        
+        if (GameManager.Instance != null && GameManager.Instance.IsGameOver) return;
 
+        // Если пробила пуля
+        if (other.GetComponent<Bullet>() != null || other.GetComponent<RicochetBullet>() != null || other.GetComponent<LaserBeam>())
+        {
+            Debug.Log("💥 Враг уничтожен выстрелом пули!");
             if (GameManager.Instance != null)
             {
                 GameManager.Instance.RegisterEnemyKilled();
             }
-
-            Destroy(gameObject);
+            ExplodeIntoPieces();
         }
     }
 
