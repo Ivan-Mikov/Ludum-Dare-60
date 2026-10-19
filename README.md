@@ -1,6 +1,6 @@
-# Project Post-Jam Stability Patch (v1.0.1)
+# Project Post-Jam Stability Patch (v1.0.2)
 
-This repository contains the post-jam stability update (**v1.0.1**) for the game jam submission.
+This repository contains the post-jam stability update (**v1.0.2**) for the game jam submission.
 
 ### Important Note for Jam Organizers & Judges
 
@@ -13,6 +13,17 @@ And build is available here:
 👉 https://github.com/Ivan-Mikov/Ludum-Dare-60/releases/tag/v1.0
 
 ---
+
+## Changelog & Bug Fixes (v1.0.2)
+
+### 1. Game Flow & Progression Fixes
+
+- **Fixed Hard Mode Softlock:** Resolved a critical progression blocker on Stage 1 (Waves 8-9) where the game loop would softlock, preventing players from advancing.
+
+---
+
+<details>
+<summary><b>View Previous Changelog (v1.0.1)</b></summary>
 
 ## Changelog & Bug Fixes (v1.0.1)
 
@@ -39,10 +50,12 @@ The fixes are prioritized by their severity, starting with critical progression 
 
 - **Fixed Hardware Cursor Import Configuration:** Resolved a platform import issue where the custom 64x64 pixel art cursor texture lacked CPU read/write access permissions. The software crosshair is now correctly rendered via hardware API (`CursorMode.Auto`).
 
+</details>
+
 ---
 
 ## Technical Specifications
 
 - **Engine Version:** Unity (6000.3.11f1)
 - **Input System:** Keyboard & Mouse (WASD / Arrows to move, LMB to shoot)
-- **Current Version:** v1.0.1 (Patch)
+- **Current Version:** v1.0.2 (Patch)

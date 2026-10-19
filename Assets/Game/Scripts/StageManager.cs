@@ -319,7 +319,7 @@ public class StageManager : MonoBehaviour
             if (GameManager.CurrentDifficulty == GameManager.Difficulty.Hard)
             {
                 finalGroupCount *= 2;
-                finalEnemiesPerGroup *= 2;
+                finalEnemiesPerGroup *= 1;
             }
 
             for (int i = 0; i < finalGroupCount; i++)

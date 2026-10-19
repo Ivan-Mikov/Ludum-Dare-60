@@ -775,11 +775,11 @@ MonoBehaviour:
       enemiesPerGroup: 3
       groupCount: 2
     - waveName: 
-      spawnType: 1
+      spawnType: 0
       enemiesPerGroup: 2
       groupCount: 3
     - waveName: 
-      spawnType: 1
+      spawnType: 0
       enemiesPerGroup: 4
       groupCount: 1
     - waveName: 
